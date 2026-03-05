@@ -14,17 +14,57 @@ public class GitDiffService {
 
         File repoDir = new File(repoPath);
 
-        // Always fetch latest remote refs
-        executor.execute(repoDir, "git", "fetch", "--all");
+        // Try to fetch latest refs, but continue if network/auth is unavailable.
+        executor.executeWithResult(repoDir, "git", "fetch", "--all");
+
+        String resolvedBase = resolveBranchRef(repoDir, baseBranch);
+        String resolvedTarget = resolveBranchRef(repoDir, targetBranch);
+
+        String diffRange = buildDiffRange(repoDir, resolvedBase, resolvedTarget);
 
         List<String> result = executor.execute(
                 repoDir,
                 "git", "diff", "--name-only",
-                "origin/" + baseBranch + "..origin/" + targetBranch
+                diffRange
         );
 
         return result.stream()
                 .filter(file -> file.endsWith(".java"))
                 .collect(Collectors.toList());
+    }
+
+    private String buildDiffRange(File repoDir, String baseRef, String targetRef) {
+        GitCommandExecutor.CommandResult mergeBase = executor.executeWithResult(
+                repoDir,
+                "git", "merge-base", baseRef, targetRef
+        );
+
+        if (mergeBase.exitCode() == 0 && !mergeBase.output().isEmpty()) {
+            return mergeBase.output().get(0) + ".." + targetRef;
+        }
+
+        return baseRef + ".." + targetRef;
+    }
+
+    private String resolveBranchRef(File repoDir, String branch) {
+        String[] candidates = new String[]{
+                "origin/" + branch,
+                branch,
+                "refs/heads/" + branch,
+                "refs/remotes/origin/" + branch
+        };
+
+        for (String candidate : candidates) {
+            GitCommandExecutor.CommandResult result = executor.executeWithResult(
+                    repoDir,
+                    "git", "rev-parse", "--verify", candidate
+            );
+
+            if (result.exitCode() == 0) {
+                return candidate;
+            }
+        }
+
+        throw new RuntimeException("Unable to resolve git branch/reference: " + branch);
     }
 }
