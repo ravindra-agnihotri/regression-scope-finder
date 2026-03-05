@@ -6,7 +6,25 @@ import java.util.List;
 
 public class GitCommandExecutor {
 
+    public record CommandResult(int exitCode, List<String> output) {
+    }
+
     public List<String> execute(File repoDir, String... command) {
+        return executeWithResult(repoDir, command).output();
+    }
+
+    public List<String> executeOrThrow(File repoDir, String... command) {
+        CommandResult result = executeWithResult(repoDir, command);
+
+        if (result.exitCode() != 0) {
+            throw new RuntimeException("Command failed (" + String.join(" ", command) + "): "
+                    + String.join("\n", result.output()));
+        }
+
+        return result.output();
+    }
+
+    public CommandResult executeWithResult(File repoDir, String... command) {
         List<String> output = new ArrayList<>();
 
         try {
@@ -25,12 +43,11 @@ public class GitCommandExecutor {
                 }
             }
 
-            process.waitFor();
+            int exitCode = process.waitFor();
+            return new CommandResult(exitCode, output);
 
         } catch (Exception e) {
-            throw new RuntimeException("Error executing git command", e);
+            throw new RuntimeException("Error executing command", e);
         }
-
-        return output;
     }
 }
