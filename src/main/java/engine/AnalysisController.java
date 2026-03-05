@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -103,7 +104,19 @@ public class AnalysisController {
 
             } catch (Exception e) {
 
-                emitter.completeWithError(e);
+                try {
+                    ObjectMapper mapper = new ObjectMapper();
+                    Map<String, String> errorPayload = new LinkedHashMap<>();
+                    errorPayload.put("message", e.getMessage() == null ? "Analysis failed" : e.getMessage());
+
+                    emitter.send(SseEmitter.event()
+                            .name("error")
+                            .data(mapper.writeValueAsString(errorPayload)));
+                } catch (Exception ignored) {
+                    // Ignore secondary emitter errors and complete the stream gracefully.
+                }
+
+                emitter.complete();
 
             }
 
