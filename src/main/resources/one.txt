@@ -1,0 +1,70 @@
+deeper call graph (6–7 layers)
+
+utility methods
+
+inheritance
+
+interfaces
+
+selenium tests
+
+intentional bugs
+
+
+
+1️⃣ Impact Graph
+
+Show call chain:
+
+validatePassword()
+        ↓
+login()
+        ↓
+LoginController.loginUser()
+        ↓
+LoginTest
+
+Graph UI:
+
+D3.js
+2️⃣ Regression Test Mapping
+
+Detect:
+
+login() → LoginTest
+
+Then show:
+
+Run these tests:
+
+LoginTest
+AuthIntegrationTest
+3️⃣ GitHub PR Analyzer (🔥 killer feature)
+
+User input:
+
+GitHub PR URL
+
+Tool automatically:
+
+fetch PR diff
+analyze methods
+predict regression scope
+generate report
+
+Ye bana deta hai tool ko:
+
+GitHub PR AI Reviewer
+💡 Real World Use
+
+Companies me ye use ho sakta hai:
+
+CI/CD
+↓
+PR created
+↓
+RegressIQ runs
+↓
+Suggest regression tests
+↓
+Reduce execution time

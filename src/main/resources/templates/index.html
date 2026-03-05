@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+    <title>RegressIQ - AI Regression Analyzer</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+</head>
+
+<body class="bg-gray-100 min-h-screen">
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<div class="max-w-6xl mx-auto p-10">
+
+    <h1 class="text-3xl font-bold mb-6 text-gray-800">
+        RegressIQ 🚀
+    </h1>
+
+    <div class="bg-white p-6 rounded-xl shadow-md mb-6">
+
+        <div class="grid grid-cols-3 gap-4">
+
+            <input id="repo" placeholder="Repository URL" class="border p-2 rounded"/>
+
+            <input id="base" placeholder="Base Branch" class="border p-2 rounded"/>
+
+            <input id="target" placeholder="Target Branch" class="border p-2 rounded"/>
+
+        </div>
+
+        <button onclick="runAnalysis()" class="mt-4 bg-blue-600 text-white px-6 py-2 rounded">
+            Analyze
+        </button>
+
+        <div id="loader" class="hidden mt-4 flex items-center space-x-2">
+
+            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+
+            <span>Analyzing repository...</span>
+
+        </div>
+
+        <div id="progress" class="mt-4 text-sm text-gray-700"></div>
+
+    </div>
+
+    <div id="files"></div>
+
+    <div id="summary"></div>
+
+    <div id="suggestions"></div>
+
+    <div class="bg-white p-6 rounded-xl shadow-md">
+
+        <h2 class="text-xl font-semibold mb-4">Analysis Results</h2>
+
+        <table class="w-full border-collapse">
+
+            <thead>
+            <tr class="bg-gray-100 text-left">
+                <th class="p-3">Method</th>
+                <th class="p-3">Risk</th>
+                <th class="p-3">Summary</th>
+            </tr>
+            </thead>
+
+            <tbody id="result"></tbody>
+
+        </table>
+        <div class="bg-white p-6 rounded-xl shadow-md mt-6">
+
+            <h2 class="text-xl font-semibold mb-4">
+                Impact Graph
+            </h2>
+
+            <svg id="graph" width="900" height="400"></svg>
+
+        </div>
+    </div>
+
+</div>
+
+<script>
+
+    function riskBadge(risk){
+
+    if(risk==="HIGH")
+    return '<span class="bg-red-500 text-white px-2 py-1 rounded">HIGH</span>'
+
+    if(risk==="MEDIUM")
+    return '<span class="bg-orange-400 text-white px-2 py-1 rounded">MEDIUM</span>'
+
+    return '<span class="bg-green-500 text-white px-2 py-1 rounded">LOW</span>'
+
+    }
+
+    function runAnalysis(){
+
+    const repo=document.getElementById("repo").value
+    const base=document.getElementById("base").value
+    const target=document.getElementById("target").value
+
+    const loader=document.getElementById("loader")
+    loader.classList.remove("hidden")
+
+    const progress=document.getElementById("progress")
+    const table=document.getElementById("result")
+
+    progress.innerHTML=""
+    table.innerHTML=""
+
+    const eventSource =
+    new EventSource(`/analyze/stream?repoUrl=${repo}&baseBranch=${base}&targetBranch=${target}`)
+
+    eventSource.addEventListener("progress",function(event){
+
+    progress.innerHTML += `<div>⏳ ${event.data}</div>`
+
+    })
+
+    eventSource.addEventListener("result",function(event){
+
+    loader.classList.add("hidden")
+
+    const data=JSON.parse(event.data)
+
+    renderFiles(data.changedFiles)
+
+    renderSummary(data.riskSummary)
+
+    renderSuggestions(data.suggestions)
+
+    data.methods.forEach(r=>{
+
+    const row=`
+    <tr class="border-b">
+    <td class="p-3">${r.method}</td>
+    <td class="p-3">${riskBadge(r.result.risk)}</td>
+    <td class="p-3">${r.result.summary}</td>
+    </tr>
+    `
+
+    table.innerHTML+=row
+
+    })
+
+    eventSource.close()
+
+    })
+
+    }
+
+    function renderFiles(files){
+
+    let html="<h3 class='text-lg font-bold mt-6'>Changed Files</h3><ul>"
+
+    files.forEach(f=>{
+    html+=`<li>${f}</li>`
+    })
+
+    html+="</ul>"
+
+    document.getElementById("files").innerHTML=html
+
+    }
+
+    function renderSummary(summary){
+
+    const html=`
+    <h3 class="text-lg font-bold mt-6">Risk Summary</h3>
+
+    <div class="flex gap-4">
+
+    <div class="text-red-600">HIGH: ${summary.HIGH}</div>
+    <div class="text-orange-500">MEDIUM: ${summary.MEDIUM}</div>
+    <div class="text-green-600">LOW: ${summary.LOW}</div>
+
+    </div>
+    `
+
+    document.getElementById("summary").innerHTML=html
+
+    }
+
+    function renderSuggestions(list){
+
+    let html="<h3 class='text-lg font-bold mt-6'>Suggested Regression Scope</h3><ul>"
+
+    list.forEach(s=>{
+    html+=`<li>${s}</li>`
+    })
+
+    html+="</ul>"
+
+    document.getElementById("suggestions").innerHTML=html
+
+    }
+    eventSource.addEventListener("graph", function(event){
+
+const data = JSON.parse(event.data)
+
+const nodes = []
+const links = []
+
+Object.keys(data).forEach(source => {
+
+nodes.push({id:source})
+
+data[source].forEach(target => {
+
+nodes.push({id:target})
+
+links.push({
+source:source,
+target:target
+})
+
+})
+
+})
+
+drawGraph(nodes,links)
+
+})
+    function drawGraph(nodes,links){
+
+const svg = d3.select("#graph")
+
+const simulation =
+d3.forceSimulation(nodes)
+.force("link",
+      d3.forceLink(links)
+      .id(d=>d.id)
+      .distance(120))
+.force("charge",
+      d3.forceManyBody()
+      .strength(-300))
+.force("center",
+      d3.forceCenter(450,200))
+
+const link =
+svg.append("g")
+.selectAll("line")
+.data(links)
+.enter()
+.append("line")
+.attr("stroke","#999")
+
+const node =
+svg.append("g")
+.selectAll("circle")
+.data(nodes)
+.enter()
+.append("circle")
+.attr("r",8)
+.attr("fill","#3b82f6")
+
+const text =
+svg.append("g")
+.selectAll("text")
+.data(nodes)
+.enter()
+.append("text")
+.text(d=>d.id)
+.attr("font-size",12)
+
+simulation.on("tick",()=>{
+
+link
+.attr("x1",d=>d.source.x)
+.attr("y1",d=>d.source.y)
+.attr("x2",d=>d.target.x)
+.attr("y2",d=>d.target.y)
+
+node
+.attr("cx",d=>d.x)
+.attr("cy",d=>d.y)
+
+text
+.attr("x",d=>d.x+10)
+.attr("y",d=>d.y)
+
+})
+
+}
+
+</script>
+
+</body>
+</html>
